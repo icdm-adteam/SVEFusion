@@ -6,21 +6,21 @@
   <img src="images/network.png" width="800"/>
 </p>
 
-# News
-* 2025/3/29: Code is coming soon...
+## 📢 News
+* 2025/3/29: 🕖 Code is coming soon...
 
-# Getting Started
+## 🛠️ Getting Started
 This code is mainly based on [OpenPCDet](https://github.com/open-mmlab/OpenPCDet). 
 
-## Installation
+### Installation
 
-### 1. Clone the source code 
+#### 1. Clone the source code 
 ```
 git clone https://github.com/icdm-adteam/SVEFusion.git
 cd SVEFusion
 ```
 
-### 2. Create conda environment and set up the base dependencies
+#### 2. Create conda environment and set up the base dependencies
 ```
 conda create --name svefusion python=3.8
 conda activate svefusion
@@ -28,17 +28,17 @@ conda install pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 pytorch-cuda=
 pip install spconv-cu118
 ```
 
-### 3. Install pcdet
+#### 3. Install pcdet
 ```
 python setup.py develop
 ```
 
-### 4. Install required environment
+#### 4. Install required environment
 ```
 pip install -r requirements.txt
 ```
 
-# Acknowledgements
+## 🌺 Acknowledgements
 Thank for the excellent 3D object detection codebases [OpenPCDet](https://github.com/open-mmlab/OpenPCDet).
 
 Thank for the excellent Spatially Sparse Convolution Library [spconv](https://github.com/traveller59/spconv)
