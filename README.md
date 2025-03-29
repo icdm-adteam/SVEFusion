@@ -6,10 +6,10 @@
   <img src="images/network.png" width="800"/>
 </p>
 
-# News
-* 2025/3/29: Code is coming soon...
+# 📢 News
+* 2025/3/29: 🕖 Code is coming soon...
 
-# Getting Started
+# 🛠️ Getting Started
 This code is mainly based on [OpenPCDet](https://github.com/open-mmlab/OpenPCDet). 
 
 ## Installation
@@ -38,7 +38,7 @@ python setup.py develop
 pip install -r requirements.txt
 ```
 
-# Acknowledgements
+# 🌺 Acknowledgements
 Thank for the excellent 3D object detection codebases [OpenPCDet](https://github.com/open-mmlab/OpenPCDet).
 
 Thank for the excellent Spatially Sparse Convolution Library [spconv](https://github.com/traveller59/spconv)
