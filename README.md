@@ -41,6 +41,11 @@ python setup.py develop
 pip install -r requirements.txt
 ```
 
+## 🎨 Visualization
+<p align="center">
+  <img src="images/visualization.png" width="800"/>
+</p>
+
 ## 🌺 Acknowledgements
 Thank for the excellent 3D object detection codebases [OpenPCDet](https://github.com/open-mmlab/OpenPCDet).
 
