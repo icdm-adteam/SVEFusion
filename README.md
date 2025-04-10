@@ -13,7 +13,6 @@ Experimental results show that SVEFusion outperforms state-of-the-art methods on
 * 2025/3/29: 🕖 Code is coming soon...
 
 ## 🛠️ Getting Started
-This code is mainly based on [OpenPCDet](https://github.com/open-mmlab/OpenPCDet). 
 
 ### Installation
 
