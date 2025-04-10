@@ -1,6 +1,6 @@
-# Beyond Pillars: Salient Voxel Enhancement of LiDAR and 4D Radar Fusion for Robust 3D Object Detection
+# Beyond Pillars: Advancing 3D Object Detection with Salient Voxel Enhancement of LiDAR and 4D Radar Fusion
 
-:wave: This repository represents the official implementation of the paper titled "***Beyond Pillars: Salient Voxel Enhancement of LiDAR and 4D Radar Fusion for Robust 3D Object Detection***". 
+:wave: This repository represents the official implementation of the paper titled "***Beyond Pillars: Advancing 3D Object Detection with Salient Voxel Enhancement of LiDAR and 4D Radar Fusion***". 
 
 We present a novel voxel-based framework *SVEFusion* for LiDAR and 4D radar fusion object detection, utilizing a voxel-level re-weighting mechanism to suppress non-empty background voxels. 
 Experimental results show that SVEFusion outperforms state-of-the-art methods on both the VoD and Astyx HiRes 2019 datasets.
