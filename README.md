@@ -10,7 +10,7 @@ Experimental results show that SVEFusion outperforms state-of-the-art methods on
 </p>
 
 ## 📢 News
-* 2025/3/29: 🕖 Code is coming soon...
+* 2025/4/13: ✨ Code and checkpoint are released!
 
 ## 🛠️ Getting Started
 
