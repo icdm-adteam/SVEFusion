@@ -148,32 +148,32 @@ cd tools
 #### 1. Train models
 * To train with multiple GPUs:
 
-```shell script
+```
 bash scripts/dist_train.sh ${NUM_GPUS} --cfg_file ${CONFIG_FILE}
 ```
 
 * To train with a single GPU:
 
-```shell script
+```
 python train.py --cfg_file ${CONFIG_FILE}
 ```
 
 For example, train SVEFusion with:
 
-```shell script
+```
 CUDA_VISIBLE_DEVICES=0,1 bash scripts/dist_train.sh 2 --cfg_file cfgs/VoD_models/SVEFusion.yaml
 ```
 
 #### 2. Test and evaluate models
 * To test a checkpoint:
 
-```shell script
+```
 python test.py --cfg_file ${CONFIG_FILE} --batch_size ${BATCH_SIZE} --ckpt ${CKPT}
 ```
 
 For example, test an SVEFusion checkpoint with:
 
-```shell script
+```
 python test.py --cfg_file cfgs/VoD_models/SVEFusion.yaml --ckpt ../output/VoD_models/SVEFusion/default/ckpt/checkpoint_epoch_80.pth
 ```
 
