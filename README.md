@@ -165,13 +165,13 @@ CUDA_VISIBLE_DEVICES=0,1 bash scripts/dist_train.sh 2 --cfg_file cfgs/VoD_models
 ```
 
 #### 2. Test and evaluate models
-* To test a trained model:
+* To test a checkpoint:
 
 ```shell script
 python test.py --cfg_file ${CONFIG_FILE} --batch_size ${BATCH_SIZE} --ckpt ${CKPT}
 ```
 
-For example, test a checkpoint with:
+For example, test an SVEFusion checkpoint with:
 
 ```shell script
 python test.py --cfg_file cfgs/VoD_models/SVEFusion.yaml --ckpt ../outputs/VoD_models/SVEFusion/default/ckpt/checkpoint_epoch_80.pth
