@@ -174,7 +174,7 @@ python test.py --cfg_file ${CONFIG_FILE} --batch_size ${BATCH_SIZE} --ckpt ${CKP
 For example, test an SVEFusion checkpoint with:
 
 ```shell script
-python test.py --cfg_file cfgs/VoD_models/SVEFusion.yaml --ckpt ../outputs/VoD_models/SVEFusion/default/ckpt/checkpoint_epoch_80.pth
+python test.py --cfg_file cfgs/VoD_models/SVEFusion.yaml --ckpt ../output/VoD_models/SVEFusion/default/ckpt/checkpoint_epoch_80.pth
 ```
 
 ## 🎨 Visualization
