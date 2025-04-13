@@ -9,7 +9,6 @@ import copy
 import numpy as np
 import torch
 import multiprocessing
-import SharedArray
 import torch.distributed as dist
 from tqdm import tqdm
 from pathlib import Path

@@ -15,7 +15,8 @@ from .pillarnet import PillarNet
 from .voxelnext import VoxelNeXt
 from .transfusion import TransFusion
 from .bevfusion import BevFusion
-
+from .pointpillar_withmask import PointPillarMask
+from .SVEFusion import SVEFusion
 __all__ = {
     'Detector3DTemplate': Detector3DTemplate,
     'SECONDNet': SECONDNet,
@@ -35,6 +36,8 @@ __all__ = {
     'VoxelNeXt': VoxelNeXt,
     'TransFusion': TransFusion,
     'BevFusion': BevFusion,
+    'PointPillarMask' : PointPillarMask,
+    'SVEFusion': SVEFusion,
 }
 
 

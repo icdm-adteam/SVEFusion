@@ -79,17 +79,30 @@ class DataProcessor(object):
     def mask_points_and_boxes_outside_range(self, data_dict=None, config=None):
         if data_dict is None:
             return partial(self.mask_points_and_boxes_outside_range, config=config)
-
+        
         if data_dict.get('points', None) is not None:
             mask = common_utils.mask_points_by_range(data_dict['points'], self.point_cloud_range)
             data_dict['points'] = data_dict['points'][mask]
-
+        
+        #print(" Mask 前的 points ", data_dict['lidar_points'].shape)
+        if data_dict.get('lidar_points', None) is not None:
+            mask = common_utils.mask_points_by_range(data_dict['lidar_points'], self.point_cloud_range)
+            data_dict['lidar_points'] = data_dict['lidar_points'][mask]
+            mask = common_utils.mask_points_by_range(data_dict['radar_points'], self.point_cloud_range)
+            data_dict['radar_points'] = data_dict['radar_points'][mask]
+        #print(" Mask 后的 points ", data_dict['lidar_points'].shape)
         if data_dict.get('gt_boxes', None) is not None and config.REMOVE_OUTSIDE_BOXES and self.training:
             mask = box_utils.mask_boxes_outside_range_numpy(
                 data_dict['gt_boxes'], self.point_cloud_range, min_num_corners=config.get('min_num_corners', 1), 
                 use_center_to_filter=config.get('USE_CENTER_TO_FILTER', True)
             )
             data_dict['gt_boxes'] = data_dict['gt_boxes'][mask]
+        if data_dict.get('bfgt', None) is not None and config.REMOVE_OUTSIDE_BOXES and self.training:
+            mask = box_utils.mask_boxes_outside_range_numpy(
+                data_dict['bfgt'], self.point_cloud_range, min_num_corners=config.get('min_num_corners', 1), 
+                use_center_to_filter=config.get('USE_CENTER_TO_FILTER', True)
+            )
+            data_dict['bfgt'] = data_dict['bfgt'][mask]
         return data_dict
 
     def shuffle_points(self, data_dict=None, config=None):
@@ -97,10 +110,20 @@ class DataProcessor(object):
             return partial(self.shuffle_points, config=config)
 
         if config.SHUFFLE_ENABLED[self.mode]:
-            points = data_dict['points']
-            shuffle_idx = np.random.permutation(points.shape[0])
-            points = points[shuffle_idx]
-            data_dict['points'] = points
+            if 'points' in data_dict:
+                points = data_dict['points']
+                shuffle_idx = np.random.permutation(points.shape[0])
+                points = points[shuffle_idx]
+                data_dict['points'] = points
+            else:
+                lidar_points = data_dict['lidar_points']
+                radar_points = data_dict['radar_points']
+                lidar_shuffle_idx = np.random.permutation(lidar_points.shape[0])
+                radar_shuffle_idx = np.random.permutation(radar_points.shape[0])
+                lidar_points = lidar_points[lidar_shuffle_idx]
+                radar_points = radar_points[radar_shuffle_idx]
+                data_dict['lidar_points'] = lidar_points
+                data_dict['radar_points'] = radar_points
 
         return data_dict
 
@@ -138,22 +161,77 @@ class DataProcessor(object):
             # just bind the config, we will create the VoxelGeneratorWrapper later,
             # to avoid pickling issues in multiprocess spawn
             return partial(self.transform_points_to_voxels, config=config)
-
-        if self.voxel_generator is None:
+        if 'points' in data_dict:
             self.voxel_generator = VoxelGeneratorWrapper(
+                    vsize_xyz=config.VOXEL_SIZE,
+                    coors_range_xyz=self.point_cloud_range,
+                    num_point_features=self.num_point_features,
+                    max_num_points_per_voxel=config.MAX_POINTS_PER_VOXEL,
+                    max_num_voxels=config.MAX_NUMBER_OF_VOXELS[self.mode],
+                )
+        else:
+            self.voxel_generator_l = VoxelGeneratorWrapper(
                 vsize_xyz=config.VOXEL_SIZE,
                 coors_range_xyz=self.point_cloud_range,
-                num_point_features=self.num_point_features,
+                num_point_features=self.num_point_features[0],
                 max_num_points_per_voxel=config.MAX_POINTS_PER_VOXEL,
                 max_num_voxels=config.MAX_NUMBER_OF_VOXELS[self.mode],
             )
+            self.voxel_generator_r = VoxelGeneratorWrapper(
+                vsize_xyz=config.VOXEL_SIZE,
+                coors_range_xyz=self.point_cloud_range,
+                num_point_features=self.num_point_features[1],
+                max_num_points_per_voxel=config.MAX_POINTS_PER_VOXEL,
+                max_num_voxels=config.MAX_NUMBER_OF_VOXELS[self.mode],
+            )
+            if 'hm_cen' in data_dict:
+                self.voxel_generator_l008 = VoxelGeneratorWrapper(
+                    vsize_xyz=config.VOXEL_SIZE_008,
+                    coors_range_xyz=self.point_cloud_range,
+                    num_point_features=self.num_point_features[0],
+                    max_num_points_per_voxel=config.MAX_POINTS_PER_VOXEL,
+                    max_num_voxels=config.MAX_NUMBER_OF_VOXELS[self.mode],
+                )
+                self.voxel_generator_r008 = VoxelGeneratorWrapper(
+                    vsize_xyz=config.VOXEL_SIZE_008,
+                    coors_range_xyz=self.point_cloud_range,
+                    num_point_features=self.num_point_features[1],
+                    max_num_points_per_voxel=config.MAX_POINTS_PER_VOXEL,
+                    max_num_voxels=config.MAX_NUMBER_OF_VOXELS[self.mode],
+                )
+                
 
-        points = data_dict['points']
-        voxel_output = self.voxel_generator.generate(points)
-        voxels, coordinates, num_points = voxel_output
+        if 'points' in data_dict:
+            points = data_dict['points']
+            # Generate the output of the pillar.
+            voxel_output = self.voxel_generator.generate(points)
+            voxels, coordinates, num_points = voxel_output
 
-        if not data_dict['use_lead_xyz']:
-            voxels = voxels[..., 3:]  # remove xyz in voxels(N, 3)
+            if not data_dict['use_lead_xyz']:
+                voxels = voxels[..., 3:]  # remove xyz in voxels(N, 3)
+                
+        else:
+            # Generate output voxel_output for different modalities in sequence.
+            lidar_points = data_dict['lidar_points']
+            radar_points = data_dict['radar_points']
+            lidar_voxel_output = self.voxel_generator_l.generate(lidar_points)
+            radar_voxel_output = self.voxel_generator_r.generate(radar_points)
+            
+            lidar_voxels, lidar_coordinates, lidar_num_points = lidar_voxel_output
+            radar_voxels, radar_coordinates, radar_num_points = radar_voxel_output
+            if 'hm_cen' in data_dict:
+                lidar_voxel_output_008 = self.voxel_generator_l008.generate(lidar_points)
+                radar_voxel_output_008 = self.voxel_generator_r008.generate(radar_points)
+                lidar_voxels_008, lidar_coordinates_008, lidar_num_points_008 = lidar_voxel_output_008
+                radar_voxels_008, radar_coordinates_008, radar_num_points_008 = radar_voxel_output_008
+
+            if not data_dict['use_lead_xyz']:
+                lidar_voxels = lidar_voxels[..., 3:]  # remove xyz in voxels(N, 3)
+                radar_voxels = radar_voxels[..., 3:]  # remove xyz in voxels(N, 3)
+                lidar_voxels_008 = lidar_voxels_008[..., 3:]  # remove xyz in voxels(N, 3)
+                radar_voxels_008 = radar_voxels_008[..., 3:]  # remove xyz in voxels(N, 3)
+
+        
 
         if config.get('DOUBLE_FLIP', False):
             voxels_list, voxel_coords_list, voxel_num_points_list = [voxels], [coordinates], [num_points]
@@ -174,20 +252,38 @@ class DataProcessor(object):
             data_dict['voxel_coords'] = voxel_coords_list
             data_dict['voxel_num_points'] = voxel_num_points_list
         else:
-            data_dict['voxels'] = voxels
-            data_dict['voxel_coords'] = coordinates
-            data_dict['voxel_num_points'] = num_points
+            if 'points' in data_dict:
+                data_dict['voxels'] = voxels
+                data_dict['voxel_coords'] = coordinates
+                data_dict['voxel_num_points'] = num_points
+            else:
+                data_dict['lidar_voxels'] = lidar_voxels
+                data_dict['lidar_voxel_coords'] = lidar_coordinates
+                data_dict['lidar_voxel_num_points'] = lidar_num_points
+                data_dict['radar_voxels'] = radar_voxels
+                data_dict['radar_voxel_coords'] = radar_coordinates
+                data_dict['radar_voxel_num_points'] = radar_num_points
+                if 'hm_cen' in data_dict:
+                    data_dict['lidar_voxels_008'] = lidar_voxels_008
+                    data_dict['lidar_voxel_coords_008'] = lidar_coordinates_008
+                    data_dict['lidar_voxel_num_points_008'] = lidar_num_points_008
+                    data_dict['radar_voxels_008'] = radar_voxels_008
+                    data_dict['radar_voxel_coords_008'] = radar_coordinates_008
+                    data_dict['radar_voxel_num_points_008'] = radar_num_points_008
         return data_dict
 
     def sample_points(self, data_dict=None, config=None):
         if data_dict is None:
             return partial(self.sample_points, config=config)
-
+        if 'points' not in data_dict:
+            points = data_dict['radar_points']
+        else:
+            points = data_dict['points']
         num_points = config.NUM_POINTS[self.mode]
         if num_points == -1:
             return data_dict
 
-        points = data_dict['points']
+        
         if num_points < len(points):
             pts_depth = np.linalg.norm(points[:, 0:3], axis=1)
             pts_near_flag = pts_depth < 40.0
@@ -204,11 +300,17 @@ class DataProcessor(object):
             np.random.shuffle(choice)
         else:
             choice = np.arange(0, len(points), dtype=np.int32)
-            if num_points > len(points):
-                extra_choice = np.random.choice(choice, num_points - len(points), replace=False)
+            num_points -= len(points)
+            while num_points > 0:
+                extra_choice = np.random.choice(choice, min(num_points,len(points)), replace=False)
+                num_points -= len(points)
                 choice = np.concatenate((choice, extra_choice), axis=0)
             np.random.shuffle(choice)
-        data_dict['points'] = points[choice]
+        if 'points' not in data_dict:
+            data_dict['radar_points'] = points[choice]
+        else:
+            data_dict['points'] = points[choice]
+        
         return data_dict
 
     def calculate_grid_size(self, data_dict=None, config=None):

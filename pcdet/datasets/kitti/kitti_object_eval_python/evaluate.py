@@ -2,8 +2,8 @@ import time
 
 import fire
 
-import .kitti_common as kitti
-from .eval import get_coco_eval_result, get_official_eval_result
+import pcdet.datasets.kitti.kitti_object_eval_python.kitti_common as kitti
+from pcdet.datasets.kitti.kitti_object_eval_python.eval import get_coco_eval_result, get_official_eval_result
 
 
 def _read_imageset_file(path):
@@ -23,6 +23,8 @@ def evaluate(label_path,
         dt_annos = kitti.filter_annos_low_score(dt_annos, score_thresh)
     val_image_ids = _read_imageset_file(label_split_file)
     gt_annos = kitti.get_label_annos(label_path, val_image_ids)
+
+
     if coco:
         return get_coco_eval_result(gt_annos, dt_annos, current_class)
     else:
@@ -30,4 +32,5 @@ def evaluate(label_path,
 
 
 if __name__ == '__main__':
-    fire.Fire()
+    #fire.Fire()
+    evaluate('/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/lidar/training/label_2', '/home/hx/OpenPCDet-master/output/VoD_models/PP_radar/default/eval/epoch_80/val/default/final_result/data','/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/lidar/ImageSets/train.txt')

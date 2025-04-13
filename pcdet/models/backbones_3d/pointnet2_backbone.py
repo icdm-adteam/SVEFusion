@@ -10,19 +10,21 @@ class PointNet2MSG(nn.Module):
     def __init__(self, model_cfg, input_channels, **kwargs):
         super().__init__()
         self.model_cfg = model_cfg
-
+        
         self.SA_modules = nn.ModuleList()
+        if self.model_cfg.SA_CONFIG.get('USE_RAWDIM', 0) > 0:
+            input_channels = self.model_cfg.SA_CONFIG.get('USE_RAWDIM',0) 
         channel_in = input_channels - 3
-
+        
         self.num_points_each_layer = []
         skip_channel_list = [input_channels - 3]
+        
         for k in range(self.model_cfg.SA_CONFIG.NPOINTS.__len__()):
             mlps = self.model_cfg.SA_CONFIG.MLPS[k].copy()
             channel_out = 0
             for idx in range(mlps.__len__()):
                 mlps[idx] = [channel_in] + mlps[idx]
                 channel_out += mlps[idx][-1]
-
             self.SA_modules.append(
                 pointnet2_modules.PointnetSAModuleMSG(
                     npoint=self.model_cfg.SA_CONFIG.NPOINTS[k],
@@ -66,7 +68,10 @@ class PointNet2MSG(nn.Module):
                 point_features: (N, C)
         """
         batch_size = batch_dict['batch_size']
-        points = batch_dict['points']
+        if 'points' not in batch_dict:
+            points = batch_dict['radar_points']
+        else:
+            points = batch_dict['points']
         batch_idx, xyz, features = self.break_up_pc(points)
 
         xyz_batch_cnt = xyz.new_zeros(batch_size).int()
@@ -158,7 +163,8 @@ class PointNet2Backbone(nn.Module):
                 point_features: (N, C)
         """
         batch_size = batch_dict['batch_size']
-        points = batch_dict['points']
+        if 'points' not in batch_dict:
+            batch_dict['points'] = batch_dict['radar_points']
         batch_idx, xyz, features = self.break_up_pc(points)
 
         xyz_batch_cnt = xyz.new_zeros(batch_size).int()

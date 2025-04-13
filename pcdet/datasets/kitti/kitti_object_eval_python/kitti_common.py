@@ -9,7 +9,7 @@ from skimage import io
 
 
 def get_image_index_str(img_idx):
-    return "{:06d}".format(img_idx)
+    return "{:05d}".format(img_idx)
 
 
 def get_kitti_info_path(idx,
@@ -332,7 +332,7 @@ def get_label_anno(label_path):
 def get_label_annos(label_folder, image_ids=None):
     if image_ids is None:
         filepaths = pathlib.Path(label_folder).glob('*.txt')
-        prog = re.compile(r'^\d{6}.txt$')
+        prog = re.compile(r'^\d{5}.txt$')
         filepaths = filter(lambda f: prog.match(f.name), filepaths)
         image_ids = [int(p.stem) for p in filepaths]
         image_ids = sorted(image_ids)

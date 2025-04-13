@@ -202,8 +202,7 @@ class DatasetTemplate(torch_data.Dataset):
             if data_dict.get('gt_boxes2d', None) is not None:
                 data_dict['gt_boxes2d'] = data_dict['gt_boxes2d'][selected]
 
-        if data_dict.get('points', None) is not None:
-            data_dict = self.point_feature_encoder.forward(data_dict)
+        data_dict = self.point_feature_encoder.forward(data_dict)
 
         data_dict = self.data_processor.forward(
             data_dict=data_dict
@@ -229,12 +228,12 @@ class DatasetTemplate(torch_data.Dataset):
 
         for key, val in data_dict.items():
             try:
-                if key in ['voxels', 'voxel_num_points']:
+                if key in ['voxels', 'voxel_num_points','lidar_voxels', 'lidar_voxel_num_points','radar_voxels', 'radar_voxel_num_points']:
                     if isinstance(val[0], list):
                         batch_size_ratio = len(val[0])
                         val = [i for item in val for i in item]
                     ret[key] = np.concatenate(val, axis=0)
-                elif key in ['points', 'voxel_coords']:
+                elif key in ['points', 'voxel_coords','lidar_points', 'lidar_voxel_coords','radar_points', 'radar_voxel_coords']:
                     coors = []
                     if isinstance(val[0], list):
                         val =  [i for item in val for i in item]
@@ -242,13 +241,28 @@ class DatasetTemplate(torch_data.Dataset):
                         coor_pad = np.pad(coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
                         coors.append(coor_pad)
                     ret[key] = np.concatenate(coors, axis=0)
-                elif key in ['gt_boxes']:
+                elif key in ['gt_boxes','bfgt']:
                     max_gt = max([len(x) for x in val])
                     batch_gt_boxes3d = np.zeros((batch_size, max_gt, val[0].shape[-1]), dtype=np.float32)
                     for k in range(batch_size):
                         batch_gt_boxes3d[k, :val[k].__len__(), :] = val[k]
                     ret[key] = batch_gt_boxes3d
-
+                elif key in ['lidar_voxels_008', 'lidar_voxel_num_points_008', 'radar_voxels_008', 'radar_voxel_num_points_008']:
+                    ret[key] = np.concatenate(val, axis=0)
+                ### add ###
+                elif key in ['lidar_points', 'lidar_voxel_coords', 'radar_points', 'radar_voxel_coords']:
+                    coors = []
+                    for i, coor in enumerate(val):
+                        coor_pad = np.pad(coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
+                        coors.append(coor_pad)
+                    ret[key] = np.concatenate(coors, axis=0)
+                ### add ###
+                elif key in ['lidar_points_008', 'lidar_voxel_coords_008', 'radar_points_008', 'radar_voxel_coords_008']:
+                    coors = []
+                    for i, coor in enumerate(val):
+                        coor_pad = np.pad(coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
+                        coors.append(coor_pad)
+                    ret[key] = np.concatenate(coors, axis=0)
                 elif key in ['roi_boxes']:
                     max_gt = max([x.shape[1] for x in val])
                     batch_gt_boxes3d = np.zeros((batch_size, val[0].shape[0], max_gt, val[0].shape[-1]), dtype=np.float32)

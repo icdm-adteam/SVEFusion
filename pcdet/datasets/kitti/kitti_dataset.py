@@ -3,12 +3,13 @@ import pickle
 
 import numpy as np
 from skimage import io
-
+from pathlib import Path
 from . import kitti_utils
+import random
 from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from ...utils import box_utils, calibration_kitti, common_utils, object3d_kitti
 from ..dataset import DatasetTemplate
-
+from ..vod_evaluation.kitti_official_evaluate import get_official_eval_result
 
 class KittiDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
@@ -25,10 +26,24 @@ class KittiDataset(DatasetTemplate):
         )
         self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
         self.root_split_path = self.root_path / ('training' if self.split != 'test' else 'testing')
-
+        self.vod_eva =  self.dataset_cfg.get('VOD_EVA', False)
+        self.sensor =  self.dataset_cfg.get('SENSOR', 'LiDAR')
+        self.sim_info_path = None
+        self.filter_empty = False
+        self.use_fog = 0 
+        # 0 no fog 
+        # 1 specific fog 
+        # 2 random fog
+        self.sim_info_path_list = [
+            Path('/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/fog_sim_lidar/_CVL_beta_0.005/'),
+            Path('/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/fog_sim_lidar/_CVL_beta_0.010/'),
+            Path('/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/fog_sim_lidar/_CVL_beta_0.020/'),
+            Path('/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/fog_sim_lidar/_CVL_beta_0.030/'),
+        ]
+        self.sim_info_path = Path('/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/fog_sim_lidar/_CVL_beta_0.060/') 
         split_dir = self.root_path / 'ImageSets' / (self.split + '.txt')
         self.sample_id_list = [x.strip() for x in open(split_dir).readlines()] if split_dir.exists() else None
-
+        self.debugcnt = 0
         self.kitti_infos = []
         self.include_kitti_data(self.mode)
 
@@ -38,18 +53,46 @@ class KittiDataset(DatasetTemplate):
         kitti_infos = []
 
         for info_path in self.dataset_cfg.INFO_PATH[mode]:
+            t_info_path = info_path
             info_path = self.root_path / info_path
+            if self.sim_info_path is not None and self.use_fog==1:
+                info_path = self.sim_info_path / t_info_path
             if not info_path.exists():
                 continue
+            print(info_path)
             with open(info_path, 'rb') as f:
                 infos = pickle.load(f)
+                
                 kitti_infos.extend(infos)
 
         self.kitti_infos.extend(kitti_infos)
+        
 
         if self.logger is not None:
             self.logger.info('Total samples for KITTI dataset: %d' % (len(kitti_infos)))
+        
+        if self.filter_empty:
+            total = self.filter_empty_box()
+            if self.logger is not None:
+                self.logger.info('Total filter samples for KITTI dataset: %d' % total)
 
+    def filter_empty_box(self):
+        cnt = 0
+        sum  = 0
+        for i in range(len(self.kitti_infos)):
+            annotations = self.kitti_infos[i]['annos']
+            cnt += (annotations['num_points_in_gt'] == 0).sum()
+            sum += annotations['num_points_in_gt'].sum()
+            mask  = annotations['num_points_in_gt'] > 0
+            for k in annotations.keys():
+                try:
+                    annotations[k] = annotations[k][mask]
+                except:
+                    print(k)
+            self.kitti_infos[i]['annos'] = annotations
+        print(sum)
+        return cnt
+    
     def set_split(self, split):
         super().__init__(
             dataset_cfg=self.dataset_cfg, class_names=self.class_names, training=self.training, root_path=self.root_path, logger=self.logger
@@ -62,8 +105,33 @@ class KittiDataset(DatasetTemplate):
 
     def get_lidar(self, idx):
         lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)
+        if self.sim_info_path is not None and self.use_fog == 1:
+            lidar_file = self.sim_info_path / ('%s.bin' % idx)
+        if self.sim_info_path_list is not None and self.use_fog == 2:
+            aug = random.randint(0, 7)
+            if aug < len(self.sim_info_path_list):
+                lidar_file = self.sim_info_path_list[aug] / ('%s.bin' % idx)
         assert lidar_file.exists()
-        return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 4)
+        if self.sensor == 'LiDAR':
+            number_of_channels = 4  # ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time']
+            points = np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, number_of_channels)
+            
+        elif self.sensor == 'Radar':
+            number_of_channels = 7  # ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time']
+            points = np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, number_of_channels)
+            # replace the list values with statistical values; for x, y, z and time, use 0 and 1 as means and std to avoid normalization
+            means = [0, 0, 0, 0, 0, 0, 0]  # 'x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time'
+            stds =  [1, 1, 1, 1, 1, 1, 1]  # 'x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time'
+            # #in practice, you should use either train, or train+val values to calculate mean and stds. Note that x, y, z, and time are not normed, but you can experiment with that.
+            means = [0, 0, 0, -13.0, -3.0, -0.1, 0]  # 'x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time'
+            stds =  [1, 1, 1, 14.0,  8.0,  6.0, 1]  # 'x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time'
+            #we then norm the channels
+            points = (points - means)/stds
+        elif self.sensor == 'Fusion':
+            lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)
+            lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)
+            pass
+        return points
 
     def get_image(self, idx):
         """
@@ -81,7 +149,7 @@ class KittiDataset(DatasetTemplate):
         return image
 
     def get_image_shape(self, idx):
-        img_file = self.root_split_path / 'image_2' / ('%s.png' % idx)
+        img_file = self.root_split_path / 'image_2' / ('%s.jpg' % idx)
         assert img_file.exists()
         return np.array(io.imread(img_file).shape[:2], dtype=np.int32)
 
@@ -213,12 +281,14 @@ class KittiDataset(DatasetTemplate):
                         flag = box_utils.in_hull(pts_fov[:, 0:3], corners_lidar[k])
                         num_points_in_gt[k] = flag.sum()
                     annotations['num_points_in_gt'] = num_points_in_gt
+                    self.debugcnt += num_points_in_gt.sum()
 
             return info
 
         sample_id_list = sample_id_list if sample_id_list is not None else self.sample_id_list
         with futures.ThreadPoolExecutor(num_workers) as executor:
             infos = executor.map(process_single_scene, sample_id_list)
+        print(self.debugcnt)
         return list(infos)
 
     def create_groundtruth_database(self, info_path=None, used_classes=None, split='train'):
@@ -347,7 +417,6 @@ class KittiDataset(DatasetTemplate):
                                  dims[idx][1], dims[idx][2], dims[idx][0], loc[idx][0],
                                  loc[idx][1], loc[idx][2], single_pred_dict['rotation_y'][idx],
                                  single_pred_dict['score'][idx]), file=f)
-
         return annos
 
     def evaluation(self, det_annos, class_names, **kwargs):
@@ -358,8 +427,28 @@ class KittiDataset(DatasetTemplate):
 
         eval_det_annos = copy.deepcopy(det_annos)
         eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.kitti_infos]
-        ap_result_str, ap_dict = kitti_eval.get_official_eval_result(eval_gt_annos, eval_det_annos, class_names)
+        if not self.vod_eva :
+            ap_result_str, ap_dict = kitti_eval.get_official_eval_result(eval_gt_annos, eval_det_annos, class_names)
+        else:
+            results = {}
+            results.update(get_official_eval_result(eval_gt_annos, eval_det_annos, class_names))
+            results.update(get_official_eval_result(eval_gt_annos, eval_det_annos, class_names, custom_method=3))
 
+            ap_result_str = ("Results: \n"
+            f"Entire annotated area: \n"
+            f"Car: {results['entire_area']['Car_3d_all']} \n"
+            f"Pedestrian: {results['entire_area']['Pedestrian_3d_all']} \n"
+            f"Cyclist: {results['entire_area']['Cyclist_3d_all']} \n"
+            f"mAP: {(results['entire_area']['Car_3d_all'] + results['entire_area']['Pedestrian_3d_all'] + results['entire_area']['Cyclist_3d_all']) / 3} \n"
+            f"mAOS: {(results['entire_area']['Car_aos_all'] + results['entire_area']['Pedestrian_aos_all'] + results['entire_area']['Cyclist_aos_all']) / 3} \n"
+            f"Driving corridor area: \n"
+            f"Car: {results['roi']['Car_3d_all']} \n"
+            f"Pedestrian: {results['roi']['Pedestrian_3d_all']} \n"
+            f"Cyclist: {results['roi']['Cyclist_3d_all']} \n"
+            f"mAP: {(results['roi']['Car_3d_all'] + results['roi']['Pedestrian_3d_all'] + results['roi']['Cyclist_3d_all']) / 3} \n",
+            f"mAOS: {(results['roi']['Car_aos_all'] + results['roi']['Pedestrian_aos_all'] + results['roi']['Cyclist_aos_all']) / 3} \n"
+            )
+            ap_dict = {}
         return ap_result_str, ap_dict
 
     def __len__(self):
@@ -428,7 +517,7 @@ class KittiDataset(DatasetTemplate):
         return data_dict
 
 
-def create_kitti_infos(dataset_cfg, class_names, data_path, save_path, workers=4):
+def create_kitti_infos(dataset_cfg, class_names, data_path, save_path, workers=35):
     dataset = KittiDataset(dataset_cfg=dataset_cfg, class_names=class_names, root_path=data_path, training=False)
     train_split, val_split = 'train', 'val'
 
@@ -455,15 +544,15 @@ def create_kitti_infos(dataset_cfg, class_names, data_path, save_path, workers=4
         pickle.dump(kitti_infos_train + kitti_infos_val, f)
     print('Kitti info trainval file is saved to %s' % trainval_filename)
 
-    dataset.set_split('test')
-    kitti_infos_test = dataset.get_infos(num_workers=workers, has_label=False, count_inside_pts=False)
-    with open(test_filename, 'wb') as f:
-        pickle.dump(kitti_infos_test, f)
-    print('Kitti info test file is saved to %s' % test_filename)
+    # dataset.set_split('test')
+    # kitti_infos_test = dataset.get_infos(num_workers=workers, has_label=False, count_inside_pts=False)
+    # with open(test_filename, 'wb') as f:
+    #     pickle.dump(kitti_infos_test, f)
+    # print('Kitti info test file is saved to %s' % test_filename)
 
-    print('---------------Start create groundtruth database for data augmentation---------------')
-    dataset.set_split(train_split)
-    dataset.create_groundtruth_database(train_filename, split=train_split)
+    # print('---------------Start create groundtruth database for data augmentation---------------')
+    # dataset.set_split(train_split)
+    # dataset.create_groundtruth_database(train_filename, split=train_split)
 
     print('---------------Data preparation Done---------------')
 
@@ -479,6 +568,6 @@ if __name__ == '__main__':
         create_kitti_infos(
             dataset_cfg=dataset_cfg,
             class_names=['Car', 'Pedestrian', 'Cyclist'],
-            data_path=ROOT_DIR / 'data' / 'kitti',
-            save_path=ROOT_DIR / 'data' / 'kitti'
+            data_path= Path('/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/lidar/'),
+            save_path= Path('/mnt/8tssd/AdverseWeather/view_of_delft_PUBLIC/fog_sim_lidar/_CVL_beta_0.100/')
         )

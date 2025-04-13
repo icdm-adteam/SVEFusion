@@ -7,8 +7,9 @@ import tqdm
 
 from pcdet.models import load_data_to_gpu
 from pcdet.utils import common_utils
-
-
+from .vis import save_frame_vis
+import thop
+import time
 def statistics_info(cfg, ret_dict, metric, disp_dict):
     for cur_thresh in cfg.MODEL.POST_PROCESSING.RECALL_THRESH_LIST:
         metric['recall_roi_%s' % str(cur_thresh)] += ret_dict.get('roi_%s' % str(cur_thresh), 0)
@@ -55,14 +56,22 @@ def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=Fal
     if cfg.LOCAL_RANK == 0:
         progress_bar = tqdm.tqdm(total=len(dataloader), leave=True, desc='eval', dynamic_ncols=True)
     start_time = time.time()
+
+    
+    vis = []
+    time_all = 0
     for i, batch_dict in enumerate(dataloader):
         load_data_to_gpu(batch_dict)
-
         if getattr(args, 'infer_time', False):
             start_time = time.time()
-
         with torch.no_grad():
+            time_start = time.time() 
             pred_dicts, ret_dict = model(batch_dict)
+
+            
+        
+
+
 
         disp_dict = {}
 

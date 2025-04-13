@@ -14,7 +14,6 @@ def train_one_epoch(model, optimizer, train_loader, model_func, lr_scheduler, ac
                     total_epochs=None, ckpt_save_dir=None, ckpt_save_time_interval=300, show_gpu_stat=False, use_amp=False):
     if total_it_each_epoch == len(train_loader):
         dataloader_iter = iter(train_loader)
-
     ckpt_save_cnt = 1
     start_it = accumulated_iter % total_it_each_epoch
 
