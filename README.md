@@ -47,7 +47,7 @@ pip install -e .
 ```
 
 ### Dataset Preparation
-The preparation for VoD dataset mainly follows [L4DR](https://github.com/ylwhxht/L4DR).
+The preparation for VoD dataset follows [L4DR](https://github.com/ylwhxht/L4DR).
 
 #### 1. Dataset download
 Please follow [VoD Dataset](https://github.com/tudelft-iv/view-of-delft-dataset/blob/main/docs/GETTING_STARTED.md) to download dataset.
