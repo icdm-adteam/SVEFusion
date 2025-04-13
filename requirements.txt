@@ -11,3 +11,6 @@ torchvision
 SharedArray
 opencv-python
 pyquaternion
+matplotlib
+vod-tudelft
+thop

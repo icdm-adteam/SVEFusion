@@ -16,7 +16,8 @@ class DataAugmentor(object):
         self.data_augmentor_queue = []
         aug_config_list = augmentor_configs if isinstance(augmentor_configs, list) \
             else augmentor_configs.AUG_CONFIG_LIST
-
+        if aug_config_list is None :
+            aug_config_list = []
         for cur_cfg in aug_config_list:
             if not isinstance(augmentor_configs, list):
                 if cur_cfg.NAME in augmentor_configs.DISABLE_AUG_LIST:
@@ -56,22 +57,40 @@ class DataAugmentor(object):
     def random_world_flip(self, data_dict=None, config=None):
         if data_dict is None:
             return partial(self.random_world_flip, config=config)
-        gt_boxes, points = data_dict['gt_boxes'], data_dict['points']
+        if 'points' in data_dict:
+            gt_boxes, points = data_dict['gt_boxes'], data_dict['points']
+        else:   
+            gt_boxes, lidar_points, radar_points = data_dict['gt_boxes'], data_dict['lidar_points'], data_dict['radar_points']
+        if 'bfgt' in data_dict:
+            bfgt = data_dict['bfgt'][:,:7]
         for cur_axis in config['ALONG_AXIS_LIST']:
             assert cur_axis in ['x', 'y']
-            gt_boxes, points, enable = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
-                gt_boxes, points, return_flip=True
-            )
-            data_dict['flip_%s'%cur_axis] = enable
-            if 'roi_boxes' in data_dict.keys():
-                num_frame, num_rois,dim = data_dict['roi_boxes'].shape
-                roi_boxes, _, _ = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
-                data_dict['roi_boxes'].reshape(-1,dim), np.zeros([1,3]), return_flip=True, enable=enable
-                )
-                data_dict['roi_boxes'] = roi_boxes.reshape(num_frame, num_rois,dim)
-
+            if 'points' in data_dict:
+                if 'bfgt' in data_dict:
+                    gt_boxes, points, bfgt = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
+                        gt_boxes, points, None, bfgt
+                    )
+                else:
+                    gt_boxes, points = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
+                        gt_boxes, points,
+                    )
+            else:
+                if 'bfgt' in data_dict:
+                    gt_boxes, points, radar_points, bfgt = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
+                        gt_boxes, lidar_points, radar_points, bfgt
+                    )
+                else:
+                    gt_boxes, lidar_points, radar_points = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
+                        gt_boxes, lidar_points, radar_points,
+                    )
+        if 'bfgt' in data_dict:
+            data_dict['bfgt'][:,:7] = bfgt
         data_dict['gt_boxes'] = gt_boxes
-        data_dict['points'] = points
+        if 'points' in data_dict:
+            data_dict['points'] = points
+        else:
+            data_dict['lidar_points'] = lidar_points
+            data_dict['radar_points'] = radar_points
         return data_dict
 
     def random_world_rotation(self, data_dict=None, config=None):
@@ -80,37 +99,67 @@ class DataAugmentor(object):
         rot_range = config['WORLD_ROT_ANGLE']
         if not isinstance(rot_range, list):
             rot_range = [-rot_range, rot_range]
-        gt_boxes, points, noise_rot = augmentor_utils.global_rotation(
-            data_dict['gt_boxes'], data_dict['points'], rot_range=rot_range, return_rot=True
-        )
-        if 'roi_boxes' in data_dict.keys():
-            num_frame, num_rois,dim = data_dict['roi_boxes'].shape
-            roi_boxes, _, _ = augmentor_utils.global_rotation(
-            data_dict['roi_boxes'].reshape(-1, dim), np.zeros([1, 3]), rot_range=rot_range, return_rot=True, noise_rotation=noise_rot)
-            data_dict['roi_boxes'] = roi_boxes.reshape(num_frame, num_rois,dim)
-
+        if 'bfgt' in data_dict:
+            bfgt = data_dict['bfgt'][:,:7]
+        if 'points' in data_dict:
+            if 'bfgt' in data_dict:
+                gt_boxes, points, bfgt = augmentor_utils.global_rotation(
+                    data_dict['gt_boxes'], data_dict['points'], None, bfgt, rot_range=rot_range, 
+                )
+            else:
+                gt_boxes, points = augmentor_utils.global_rotation(
+                    data_dict['gt_boxes'], data_dict['points'], rot_range=rot_range
+                )
+        else:
+            if 'bfgt' in data_dict:
+                gt_boxes, lidar_points, radar_points, bfgt = augmentor_utils.global_rotation(
+                    data_dict['gt_boxes'], data_dict['lidar_points'], data_dict['radar_points'],bfgt, rot_range=rot_range
+                )
+            else:
+                gt_boxes, lidar_points, radar_points = augmentor_utils.global_rotation(
+                data_dict['gt_boxes'], data_dict['lidar_points'], data_dict['radar_points'], rot_range=rot_range
+            )
+        if 'bfgt' in data_dict:
+            data_dict['bfgt'][:,:7] = bfgt
         data_dict['gt_boxes'] = gt_boxes
-        data_dict['points'] = points
-        data_dict['noise_rot'] = noise_rot
+        if 'points' in data_dict:
+            data_dict['points'] = points
+        else:
+            data_dict['lidar_points'] = lidar_points
+            data_dict['radar_points'] = radar_points
         return data_dict
 
     def random_world_scaling(self, data_dict=None, config=None):
         if data_dict is None:
             return partial(self.random_world_scaling, config=config)
-        
-        if 'roi_boxes' in data_dict.keys():
-            gt_boxes, roi_boxes, points, noise_scale = augmentor_utils.global_scaling_with_roi_boxes(
-                data_dict['gt_boxes'], data_dict['roi_boxes'], data_dict['points'], config['WORLD_SCALE_RANGE'], return_scale=True
-            )
-            data_dict['roi_boxes'] = roi_boxes
+        if 'bfgt' in data_dict:
+            bfgt = data_dict['bfgt'][:,:7]
+        if 'points' in data_dict:
+            if 'bfgt' in data_dict:
+                gt_boxes, points, bfgt = augmentor_utils.global_scaling(
+                    gt_boxes = data_dict['gt_boxes'], lidar_points = data_dict['points'], radar_points = None, bfgt = bfgt, scale_range = config['WORLD_SCALE_RANGE']
+                )
+            else:
+                gt_boxes, points = augmentor_utils.global_scaling(
+                    gt_boxes = data_dict['gt_boxes'], lidar_points = data_dict['points'], scale_range = config['WORLD_SCALE_RANGE']
+                )
         else:
-            gt_boxes, points, noise_scale = augmentor_utils.global_scaling(
-                data_dict['gt_boxes'], data_dict['points'], config['WORLD_SCALE_RANGE'], return_scale=True
+            if 'bfgt' in data_dict:
+                gt_boxes, lidar_points, radar_points, bfgt = augmentor_utils.global_scaling(
+                    data_dict['gt_boxes'], data_dict['lidar_points'], data_dict['radar_points'], bfgt = bfgt, scale_range =  config['WORLD_SCALE_RANGE']
+                )
+            else:
+                gt_boxes, lidar_points, radar_points = augmentor_utils.global_scaling(
+                data_dict['gt_boxes'], data_dict['lidar_points'], data_dict['radar_points'], scale_range = config['WORLD_SCALE_RANGE']
             )
-
         data_dict['gt_boxes'] = gt_boxes
-        data_dict['points'] = points
-        data_dict['noise_scale'] = noise_scale
+        if 'bfgt' in data_dict:
+            data_dict['bfgt'][:,:7] = bfgt
+        if 'points' in data_dict:
+            data_dict['points'] = points
+        else:
+            data_dict['lidar_points'] = lidar_points
+            data_dict['radar_points'] = radar_points
         return data_dict
 
     def random_image_flip(self, data_dict=None, config=None):

@@ -4,12 +4,12 @@ import pickle
 import random
 import shutil
 import subprocess
-import SharedArray
 
 import numpy as np
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
+
 
 
 def check_numpy_to_torch(x):
@@ -187,8 +187,8 @@ def init_dist_slurm(tcp_port, local_rank, backend='nccl'):
 
 
 def init_dist_pytorch(tcp_port, local_rank, backend='nccl'):
-    if mp.get_start_method(allow_none=True) is None:
-        mp.set_start_method('spawn')
+    # if mp.get_start_method(allow_none=True) is None:
+    #     mp.set_start_method('spawn')
     # os.environ['MASTER_PORT'] = str(tcp_port)
     # os.environ['MASTER_ADDR'] = 'localhost'
     num_gpus = torch.cuda.device_count()
@@ -196,9 +196,9 @@ def init_dist_pytorch(tcp_port, local_rank, backend='nccl'):
 
     dist.init_process_group(
         backend=backend,
-        # init_method='tcp://127.0.0.1:%d' % tcp_port,
-        # rank=local_rank,
-        # world_size=num_gpus
+        #init_method='tcp://127.0.0.1:%d' % tcp_port,
+        #rank=local_rank,
+        #world_size=num_gpus
     )
     rank = dist.get_rank()
     return num_gpus, rank

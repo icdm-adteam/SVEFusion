@@ -5,7 +5,6 @@ import copy
 import numpy as np
 from skimage import io
 import torch
-import SharedArray
 import torch.distributed as dist
 
 from ...ops.iou3d_nms import iou3d_nms_utils
@@ -117,13 +116,18 @@ class DataBaseSampler(object):
             if min_num > 0 and name in db_infos.keys():
                 filtered_infos = []
                 for info in db_infos[name]:
-                    if info['num_points_in_gt'] >= min_num:
-                        filtered_infos.append(info)
+                    if 'num_points_in_gt' in info:
+                        if info['num_points_in_gt'] >= min_num:
+                            filtered_infos.append(info)
+                    else:
+                        if info['lidar_num_points_in_gt'] >= min_num and info['radar_num_points_in_gt'] >= min_num:
+                            filtered_infos.append(info)
 
                 if self.logger is not None:
                     self.logger.info('Database filter by min points %s: %d => %d' %
                                      (name, len(db_infos[name]), len(filtered_infos)))
                 db_infos[name] = filtered_infos
+
 
         return db_infos
 
@@ -366,7 +370,11 @@ class DataBaseSampler(object):
         gt_boxes_mask = data_dict['gt_boxes_mask']
         gt_boxes = data_dict['gt_boxes'][gt_boxes_mask]
         gt_names = data_dict['gt_names'][gt_boxes_mask]
-        points = data_dict['points']
+        if 'points' in data_dict:
+            points = data_dict['points']
+        else:
+            lidar_points = data_dict['lidar_points']
+            radar_points = data_dict['radar_points']
         if self.sampler_cfg.get('USE_ROAD_PLANE', False) and mv_height is None:
             sampled_gt_boxes, mv_height = self.put_boxes_on_road_planes(
                 sampled_gt_boxes, data_dict['road_plane'], data_dict['calib']
@@ -375,46 +383,54 @@ class DataBaseSampler(object):
             data_dict.pop('road_plane')
 
         obj_points_list = []
-
+        lidar_obj_points_list = []
+        radar_obj_points_list = []
         # convert sampled 3D boxes to image plane
         img_aug_gt_dict = self.initilize_image_aug_dict(data_dict, gt_boxes_mask)
 
-        if self.use_shared_memory:
-            gt_database_data = SharedArray.attach(f"shm://{self.gt_database_data_key}")
-            gt_database_data.setflags(write=0)
-        else:
-            gt_database_data = None
+        gt_database_data = None
 
         for idx, info in enumerate(total_valid_sampled_dict):
-            if self.use_shared_memory:
-                start_offset, end_offset = info['global_data_offset']
-                obj_points = copy.deepcopy(gt_database_data[start_offset:end_offset])
-            else:
+            if 'path' in info:
                 file_path = self.root_path / info['path']
-
                 obj_points = np.fromfile(str(file_path), dtype=np.float32).reshape(
                     [-1, self.sampler_cfg.NUM_POINT_FEATURES])
-                if obj_points.shape[0] != info['num_points_in_gt']:
-                    obj_points = np.fromfile(str(file_path), dtype=np.float64).reshape(-1, self.sampler_cfg.NUM_POINT_FEATURES)
 
-            assert obj_points.shape[0] == info['num_points_in_gt']
-            obj_points[:, :3] += info['box3d_lidar'][:3].astype(np.float32)
+                obj_points[:, :3] += info['box3d_lidar'][:3]
 
-            if self.sampler_cfg.get('USE_ROAD_PLANE', False):
+                obj_points_list.append(obj_points)
+            else:
+                lidar_file_path = self.root_path / info['lidar_path']
+                lidar_obj_points = np.fromfile(str(lidar_file_path), dtype=np.float32).reshape(
+                    [-1, self.sampler_cfg.NUM_POINT_FEATURES_L])
+
+                lidar_obj_points[:, :3] += info['box3d_lidar'][:3]
+
+                lidar_obj_points_list.append(lidar_obj_points)
+
+                radar_file_path = self.root_path / info['radar_path']
+                radar_obj_points = np.fromfile(str(radar_file_path), dtype=np.float32).reshape(
+                    [-1, self.sampler_cfg.NUM_POINT_FEATURES_R])
+
+                radar_obj_points[:, :3] += info['box3d_lidar'][:3]
+
+                radar_obj_points_list.append(radar_obj_points)
+
+            # if self.sampler_cfg.get('USE_ROAD_PLANE', False):
                 # mv height
-                obj_points[:, 2] -= mv_height[idx]
+                # obj_points[:, 2] -= mv_height[idx]
 
-            if self.img_aug_type is not None:
-                img_aug_gt_dict, obj_points = self.collect_image_crops(
-                    img_aug_gt_dict, info, data_dict, obj_points, sampled_gt_boxes, sampled_gt_boxes2d, idx
-                )
+        if 'path' in info:
+            obj_points = np.concatenate(obj_points_list, axis=0)        
+            flag = obj_points.shape[-1] != points.shape[-1]
+        else:
+            lidar_obj_points = np.concatenate(lidar_obj_points_list, axis=0)
+            radar_obj_points = np.concatenate(radar_obj_points_list, axis=0)
+            flag = lidar_obj_points.shape[-1] != lidar_points.shape[-1]
 
-            obj_points_list.append(obj_points)
-
-        obj_points = np.concatenate(obj_points_list, axis=0)
         sampled_gt_names = np.array([x['name'] for x in total_valid_sampled_dict])
 
-        if self.sampler_cfg.get('FILTER_OBJ_POINTS_BY_TIMESTAMP', False) or obj_points.shape[-1] != points.shape[-1]:
+        if self.sampler_cfg.get('FILTER_OBJ_POINTS_BY_TIMESTAMP', False) or flag:
             if self.sampler_cfg.get('FILTER_OBJ_POINTS_BY_TIMESTAMP', False):
                 min_time = min(self.sampler_cfg.TIME_RANGE[0], self.sampler_cfg.TIME_RANGE[1])
                 max_time = max(self.sampler_cfg.TIME_RANGE[0], self.sampler_cfg.TIME_RANGE[1])
@@ -429,13 +445,23 @@ class DataBaseSampler(object):
         large_sampled_gt_boxes = box_utils.enlarge_box3d(
             sampled_gt_boxes[:, 0:7], extra_width=self.sampler_cfg.REMOVE_EXTRA_WIDTH
         )
-        points = box_utils.remove_points_in_boxes3d(points, large_sampled_gt_boxes)
-        points = np.concatenate([obj_points[:, :points.shape[-1]], points], axis=0)
+        if 'points' in data_dict:
+            points = box_utils.remove_points_in_boxes3d(points, large_sampled_gt_boxes)
+            points = np.concatenate([obj_points, points], axis=0)
+        else:
+            lidar_points = box_utils.remove_points_in_boxes3d(lidar_points, large_sampled_gt_boxes)
+            lidar_points = np.concatenate([lidar_obj_points, lidar_points], axis=0)
+            radar_points = box_utils.remove_points_in_boxes3d(radar_points, large_sampled_gt_boxes)
+            radar_points = np.concatenate([radar_obj_points, radar_points], axis=0)
         gt_names = np.concatenate([gt_names, sampled_gt_names], axis=0)
         gt_boxes = np.concatenate([gt_boxes, sampled_gt_boxes], axis=0)
         data_dict['gt_boxes'] = gt_boxes
         data_dict['gt_names'] = gt_names
-        data_dict['points'] = points
+        if 'points' in data_dict:
+            data_dict['points'] = points
+        else:
+            data_dict['lidar_points'] = lidar_points
+            data_dict['radar_points'] = radar_points
 
         if self.img_aug_type is not None:
             data_dict = self.copy_paste_to_image(img_aug_gt_dict, data_dict, points)
