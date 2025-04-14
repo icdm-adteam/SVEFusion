@@ -101,7 +101,7 @@ class SNAFusion(VFETemplate):
         self.l2r_neighbor_num = self.model_cfg.L2R_NEIGHBOR_NUM
 
         self.vfe_dim = self.model_cfg.VFE_DIM
-        self.inter_ral = SNA(self.uniform_features * 4, self.vfe_dim)
+        self.sna = SNA(self.uniform_features * 4, self.vfe_dim)
 
         self.voxel_x = voxel_size[0]
         self.voxel_y = voxel_size[1]
@@ -265,12 +265,12 @@ class SNAFusion(VFETemplate):
         radar_features_output_list = []
         for i in range(len(self.r2l_neighbor_num)):
             neighbors_idx = self.compute_voxel_neighbors(lidar_coords, radar_coords, k_neighbors=self.r2l_neighbor_num[i])
-            lidar_features_output = self.inter_ral(lidar_features, radar_features, neighbors_idx)
+            lidar_features_output = self.sna(lidar_features, radar_features, neighbors_idx)
             lidar_features_output = lidar_features_output.view([lidar_features_output.size()[0], lidar_features_output.size()[1]])
             lidar_features_output_list.append(lidar_features_output)
 
             neighbors_idx = self.compute_voxel_neighbors(radar_coords, lidar_coords, k_neighbors=self.l2r_neighbor_num[i])
-            radar_features_output = self.inter_ral(radar_features, lidar_features, neighbors_idx)
+            radar_features_output = self.sna(radar_features, lidar_features, neighbors_idx)
             radar_features_output = radar_features_output.view([radar_features_output.size()[0], radar_features_output.size()[1]])
             radar_features_output_list.append(radar_features_output)
 
