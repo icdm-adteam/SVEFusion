@@ -1,4 +1,12 @@
 # Beyond Pillars: Advancing 3D Object Detection with Salient Voxel Enhancement of LiDAR and 4D Radar Fusion
+---
+
+<p align="center">
+  <!-- <img src="images/visualization.png" width="800"/> -->
+  <img src="images/inference.gif" width="800"/>
+</p>
+
+---
 
 :wave: This repository represents the official implementation of the paper titled "***Beyond Pillars: Advancing 3D Object Detection with Salient Voxel Enhancement of LiDAR and 4D Radar Fusion***". 
 
@@ -177,11 +185,7 @@ For example, test an SVEFusion checkpoint with:
 python test.py --cfg_file cfgs/VoD_models/SVEFusion.yaml --ckpt ../output/VoD_models/SVEFusion/default/ckpt/checkpoint_epoch_80.pth
 ```
 
-## 🎨 Visualization
-<p align="center">
-  <!-- <img src="images/visualization.png" width="800"/> -->
-  <img src="images/inference.gif" width="800"/>
-</p>
+<!-- ## 🎨 Visualization -->
 
 ## 🌺 Acknowledgements
 Thank for the excellent 3D object detection codebases [OpenPCDet](https://github.com/open-mmlab/OpenPCDet).
