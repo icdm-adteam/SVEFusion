@@ -193,4 +193,3 @@ Thank for the excellent 3D object detection codebases [OpenPCDet](https://github
 Thank for the excellent spatially sparse convolution library [spconv](https://github.com/traveller59/spconv).
 
 Thank for the excellent 4D radar dataset [VoD Dataset](https://github.com/tudelft-iv/view-of-delft-dataset/blob/main/docs/GETTING_STARTED.md) to download dataset.
-
