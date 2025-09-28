@@ -1,4 +1,4 @@
-# Beyond Pillars: Advancing 3D Object Detection with Salient Voxel Enhancement of LiDAR and 4D Radar Fusion
+# Beyond Pillars: Advancing 3D Object Detection with Salient Voxel Enhancement of LiDAR-4D Radar Fusion
 ---
 
 <p align="center">
