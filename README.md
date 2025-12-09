@@ -18,6 +18,7 @@ Experimental results show that SVEFusion outperforms state-of-the-art methods on
 </p>
 
 ## 📢 News
+* 2025/12/3: 🎈 Our paper has been accepted by **Pattern Recognition**!
 * 2025/7/16: ✨ Code and checkpoint are released! The checkpoint is available via [Google Drive](https://drive.google.com/file/d/1xDiKM1mK2GlADhmk82ljXzgKOpXhFGfr/view?usp=sharing).
 
 ## 🛠️ Getting Started
